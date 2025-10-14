@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 // Client wraps the Docker client and provides high-level operations
@@ -104,9 +106,12 @@ func (c *Client) imageExists(ctx context.Context, imageName string) (bool, error
 func (c *Client) CreateContainer(ctx context.Context, config *ContainerConfig) (string, error) {
 	// Build container configuration
 	containerConfig := &container.Config{
-		Image: config.Image,
-		Cmd:   config.Command,
-		Env:   config.Env,
+		Image:     config.Image,
+		Cmd:       config.Command,
+		Env:       config.Env,
+		OpenStdin: config.OpenStdin,
+		StdinOnce: config.StdinOnce,
+		Tty:       config.Tty,
 		Labels: map[string]string{
 			"managed-by": "mcp-manager",
 			"server":     config.Name,
@@ -117,9 +122,13 @@ func (c *Client) CreateContainer(ctx context.Context, config *ContainerConfig) (
 	hostConfig := &container.HostConfig{
 		Binds:       config.Volumes,
 		NetworkMode: container.NetworkMode(config.Network),
-		RestartPolicy: container.RestartPolicy{
-			Name: "unless-stopped",
-		},
+	}
+
+	// Add restart policy if specified
+	if config.RestartPolicy != "" {
+		hostConfig.RestartPolicy = container.RestartPolicy{
+			Name: container.RestartPolicyMode(config.RestartPolicy),
+		}
 	}
 
 	// Create the container
@@ -265,4 +274,67 @@ func (c *Client) ListContainers(ctx context.Context) ([]ContainerStatus, error) 
 	}
 
 	return statuses, nil
+}
+
+// AttachContainer attaches to a container and returns stdin/stdout streams
+func (c *Client) AttachContainer(ctx context.Context, containerID string) (io.WriteCloser, io.ReadCloser, error) {
+	// Attach to the container
+	resp, err := c.cli.ContainerAttach(ctx, containerID, container.AttachOptions{
+		Stream: true,
+		Stdin:  true,
+		Stdout: true,
+		Stderr: true, // Need to request both to properly demultiplex
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to attach to container %s: %w", containerID, err)
+	}
+
+	// Docker attach returns a multiplexed stream where stdout and stderr are mixed
+	// with 8-byte headers. We need to demultiplex to extract only stdout.
+	// Create a pipe to receive demultiplexed stdout
+	stdoutPipe, stdoutWriter := io.Pipe()
+
+	// Start a goroutine to demultiplex the stream
+	go func() {
+		// Use Docker's stdcopy to demultiplex stdout and stderr
+		// We discard stderr and only keep stdout
+		_, err := stdcopy.StdCopy(stdoutWriter, io.Discard, resp.Reader)
+		stdoutWriter.CloseWithError(err)
+	}()
+
+	// The resp is a hijacked connection that provides both read and write
+	// We need to wrap it to provide separate stdin/stdout interfaces
+	stdin := &containerStdin{conn: resp}
+	stdout := &containerStdout{conn: resp, reader: stdoutPipe}
+
+	return stdin, stdout, nil
+}
+
+// containerStdin wraps the hijacked connection for writing (stdin)
+type containerStdin struct {
+	conn types.HijackedResponse
+}
+
+func (cs *containerStdin) Write(p []byte) (n int, err error) {
+	return cs.conn.Conn.Write(p)
+}
+
+func (cs *containerStdin) Close() error {
+	cs.conn.Close()
+	return nil
+}
+
+// containerStdout wraps the hijacked connection for reading (stdout)
+type containerStdout struct {
+	conn   types.HijackedResponse
+	reader io.Reader
+}
+
+func (cs *containerStdout) Read(p []byte) (n int, err error) {
+	return cs.reader.Read(p)
+}
+
+func (cs *containerStdout) Close() error {
+	// The connection is closed by the stdin closer
+	return nil
 }

@@ -246,8 +246,19 @@ func (m *Manager) buildEnv(envVars []config.EnvVar) ([]string, error) {
 func (m *Manager) buildVolumes(volumes []config.Volume) ([]string, error) {
 	var binds []string
 	for _, v := range volumes {
+		hostPath := v.HostPath
+
+		// Expand tilde to home directory
+		if strings.HasPrefix(hostPath, "~/") {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get home directory: %w", err)
+			}
+			hostPath = strings.Replace(hostPath, "~", homeDir, 1)
+		}
+
 		// Expand environment variables in paths
-		hostPath := os.ExpandEnv(v.HostPath)
+		hostPath = os.ExpandEnv(hostPath)
 
 		// Build bind mount string
 		bind := fmt.Sprintf("%s:%s", hostPath, v.ContainerPath)

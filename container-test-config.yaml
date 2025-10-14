@@ -1,0 +1,36 @@
+# Test configuration for MCP Gateway - Container Mode
+version: "1.0"
+
+settings:
+  data_dir: ~/.mcp-manager
+  network: mcp-network
+  log_level: info
+
+servers:
+  # Filesystem server in container mode
+  - name: filesystem
+    enabled: true
+    description: "Filesystem MCP server (containerized)"
+
+    docker:
+      image: mcp/filesystem:latest
+      pull_policy: if-not-present
+
+    # Empty command because ENTRYPOINT is set in Dockerfile
+    command: []
+    args: ["/workspace"]
+
+    env:
+      - name: NODE_ENV
+        value: production
+
+    volumes:
+      - host_path: /Users/ben.gittins/Code/work/mcp-manager
+        container_path: /workspace
+        read_only: true
+
+    health_check:
+      enabled: false
+
+    agents:
+      - claude-code

@@ -91,6 +91,10 @@ func setDefaults(config *Config) {
 		config.Settings.LogLevel = "info"
 	}
 
+	if config.Settings.GatewayPort == 0 {
+		config.Settings.GatewayPort = 52080
+	}
+
 	// Set defaults for each server
 	for i := range config.Servers {
 		server := &config.Servers[i]

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bengittins/mcp-manager/internal/config"
@@ -121,6 +122,15 @@ func TestBuildVolumes(t *testing.T) {
 			contains: "/host:/container:ro",
 		},
 		{
+			name: "tilde expansion",
+			volumes: []config.Volume{
+				{HostPath: "~/.gitconfig", ContainerPath: "/root/.gitconfig", ReadOnly: true},
+			},
+			wantLen: 1,
+			wantErr: false,
+			// We can't check exact path since it depends on the user's home dir
+		},
+		{
 			name: "multiple volumes",
 			volumes: []config.Volume{
 				{HostPath: "/host1", ContainerPath: "/container1", ReadOnly: false},
@@ -160,6 +170,18 @@ func TestBuildVolumes(t *testing.T) {
 				}
 				if !found {
 					t.Errorf("buildVolumes() result does not contain %s", tt.contains)
+				}
+			}
+
+			// Special check for tilde expansion test
+			if tt.name == "tilde expansion" && len(volumes) > 0 {
+				// Should not contain tilde anymore
+				if strings.Contains(volumes[0], "~") {
+					t.Errorf("buildVolumes() failed to expand tilde: %s", volumes[0])
+				}
+				// Should contain :ro flag
+				if !strings.HasSuffix(volumes[0], ":ro") {
+					t.Errorf("buildVolumes() missing readonly flag: %s", volumes[0])
 				}
 			}
 		})

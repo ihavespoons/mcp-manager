@@ -2,12 +2,16 @@ package docker
 
 // ContainerConfig contains the configuration for creating a container
 type ContainerConfig struct {
-	Name    string   // Container name
-	Image   string   // Docker image to use
-	Command []string // Command to run
-	Env     []string // Environment variables in KEY=VALUE format
-	Volumes []string // Volume mounts in host:container format
-	Network string   // Docker network to connect to
+	Name          string   // Container name
+	Image         string   // Docker image to use
+	Command       []string // Command to run
+	Env           []string // Environment variables in KEY=VALUE format
+	Volumes       []string // Volume mounts in host:container format
+	Network       string   // Docker network to connect to
+	RestartPolicy string   // Restart policy: "" (none), "unless-stopped", "always", "on-failure"
+	OpenStdin     bool     // Keep stdin open for attach
+	StdinOnce     bool     // Close stdin after one attach
+	Tty           bool     // Allocate a pseudo-TTY
 }
 
 // ContainerStatus represents the status of a Docker container

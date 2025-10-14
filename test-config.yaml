@@ -1,0 +1,54 @@
+# Test configuration for MCP Gateway
+version: "1.0"
+
+settings:
+  data_dir: ~/.mcp-manager
+  network: mcp-network
+  log_level: info
+
+servers:
+  # Filesystem server using npx (process mode)
+  - name: filesystem
+    enabled: true
+    description: "Filesystem MCP server for testing"
+
+    docker:
+      image: ""  # Not used in process mode
+      pull_policy: never
+
+    # For process mode - use npx to run the MCP server
+    command: ["npx"]
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+
+    env:
+      - name: NODE_ENV
+        value: production
+
+    volumes: []
+
+    health_check:
+      enabled: false
+
+    agents:
+      - claude-code
+
+  # Echo server for simple testing (if we create one)
+  - name: echo
+    enabled: false
+    description: "Simple echo server for testing"
+
+    docker:
+      image: ""
+      pull_policy: never
+
+    command: ["node"]
+    args: ["-e", "const readline = require('readline'); const rl = readline.createInterface({input: process.stdin, output: process.stdout, terminal: false}); rl.on('line', (line) => { const msg = JSON.parse(line); if (msg.method === 'initialize') { console.log(JSON.stringify({jsonrpc: '2.0', id: msg.id, result: {protocolVersion: '0.1.0', capabilities: {}, serverInfo: {name: 'echo', version: '1.0.0'}}})); } else { console.log(JSON.stringify({jsonrpc: '2.0', id: msg.id, result: {echo: msg}})); } });"]
+
+    env: []
+    volumes: []
+
+    health_check:
+      enabled: false
+
+    agents:
+      - claude-code

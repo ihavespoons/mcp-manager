@@ -13,9 +13,10 @@ type Config struct {
 
 // Settings contains global configuration settings
 type Settings struct {
-	DataDir  string `yaml:"data_dir"`
-	Network  string `yaml:"network"`
-	LogLevel string `yaml:"log_level"`
+	DataDir     string `yaml:"data_dir"`
+	Network     string `yaml:"network"`
+	LogLevel    string `yaml:"log_level"`
+	GatewayPort int    `yaml:"gateway_port"`
 }
 
 // Server represents a single MCP server configuration
