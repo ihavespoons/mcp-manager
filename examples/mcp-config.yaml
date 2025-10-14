@@ -1,0 +1,114 @@
+# MCP Manager Configuration
+# This file defines the MCP servers that should be managed by mcp-manager
+
+version: "1.0"
+
+# Global settings
+settings:
+  # Directory where mcp-manager stores runtime data
+  data_dir: ~/.mcp-manager
+  # Docker network to use for MCP containers
+  network: mcp-network
+  # Log level (debug, info, warn, error)
+  log_level: info
+
+# MCP servers to manage
+servers:
+  # Example: Filesystem MCP server
+  - name: filesystem
+    enabled: true
+    description: "Provides filesystem access capabilities"
+
+    # Docker configuration
+    docker:
+      image: mcp/filesystem:latest
+      # Pull policy: always, never, if-not-present
+      pull_policy: if-not-present
+
+    # Command and arguments to run in the container
+    command: ["mcp-server-filesystem"]
+    args: ["--root", "/workspace"]
+
+    # Environment variables
+    env:
+      - name: LOG_LEVEL
+        value: debug
+
+    # Volume mounts
+    volumes:
+      - host_path: ${PWD}
+        container_path: /workspace
+        read_only: false
+
+    # Health check configuration
+    health_check:
+      enabled: true
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    # Which agents this server should be registered with
+    agents:
+      - claude-code
+
+  # Example: Git MCP server
+  - name: git
+    enabled: true
+    description: "Provides git repository access"
+
+    docker:
+      image: mcp/git:latest
+      pull_policy: if-not-present
+
+    command: ["mcp-server-git"]
+
+    env:
+      - name: GIT_CONFIG_GLOBAL
+        value: /root/.gitconfig
+
+    volumes:
+      - host_path: ~/.gitconfig
+        container_path: /root/.gitconfig
+        read_only: true
+      - host_path: ${PWD}
+        container_path: /workspace
+        read_only: false
+
+    health_check:
+      enabled: true
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    agents:
+      - claude-code
+
+  # Example: Database MCP server
+  - name: postgres
+    enabled: false
+    description: "Provides PostgreSQL database access"
+
+    docker:
+      image: mcp/postgres:latest
+      pull_policy: if-not-present
+
+    command: ["mcp-server-postgres"]
+
+    env:
+      - name: POSTGRES_HOST
+        value: localhost
+      - name: POSTGRES_PORT
+        value: "5432"
+      - name: POSTGRES_USER
+        value_from_env: POSTGRES_USER
+      - name: POSTGRES_PASSWORD
+        value_from_env: POSTGRES_PASSWORD
+
+    health_check:
+      enabled: true
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    agents:
+      - claude-code
