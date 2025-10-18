@@ -1,5 +1,5 @@
 # Binaries
-mcp-manager
+/mcp-manager
 *.exe
 *.exe~
 *.dll
@@ -37,3 +37,4 @@ mcp-config.yaml
 # Build artifacts
 dist/
 build/
+bin/
