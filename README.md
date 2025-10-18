@@ -434,7 +434,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT License - see LICENSE file for details
+Functional Source License, Version 1.1, MIT Future License (FSL-1.1-MIT)
+
+See [LICENSE](LICENSE) file for details.
+
+**Summary**: This is a source-available license that converts to MIT after two years. You can use, modify, and redistribute the software for non-production use. For production use beyond the terms of this license, please contact the licensor.
 
 ## Acknowledgments
 

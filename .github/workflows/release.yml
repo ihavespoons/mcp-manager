@@ -163,7 +163,7 @@ jobs:
             desc "MCP (Model Context Protocol) server manager with Docker support"
             homepage "https://github.com/ihavespoons/mcp-manager"
             version "${VERSION#v}"
-            license "MIT"
+            license "FSL-1.1-MIT"
 
             on_macos do
               if Hardware::CPU.arm?

@@ -193,7 +193,7 @@ class McpManager < Formula
   desc "MCP (Model Context Protocol) server manager with Docker support"
   homepage "https://github.com/ihavespoons/mcp-manager"
   version "0.1.0"
-  license "MIT"
+  license "FSL-1.1-MIT"
 
   on_macos do
     if Hardware::CPU.arm?
