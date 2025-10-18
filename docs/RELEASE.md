@@ -19,7 +19,7 @@ Create a separate GitHub repository for the Homebrew tap:
 
 ```bash
 # Repository naming convention: homebrew-{package-name}
-# Example: bengittins/homebrew-mcp-manager
+# Example: ihavespoons/homebrew-mcp-manager
 ```
 
 The tap repository will contain:
@@ -32,7 +32,7 @@ homebrew-mcp-manager/
 
 ### 2. GitHub Secrets
 
-Configure the following secret in the main repository (bengittins/mcp-manager):
+Configure the following secret in the main repository (ihavespoons/mcp-manager):
 
 - `HOMEBREW_TAP_TOKEN`: GitHub Personal Access Token with `repo` scope for updating the tap repository
 
@@ -133,7 +133,7 @@ git push origin v0.1.0
 
 ```bash
 # Install from Homebrew tap
-brew tap bengittins/mcp-manager
+brew tap ihavespoons/mcp-manager
 brew install mcp-manager
 
 # Verify version
@@ -162,7 +162,7 @@ mcp-manager validate --config mcp-config.yaml
    ## Installation
 
    \`\`\`bash
-   brew tap bengittins/mcp-manager
+   brew tap ihavespoons/mcp-manager
    brew install mcp-manager
    \`\`\`
 
@@ -177,7 +177,7 @@ mcp-manager validate --config mcp-config.yaml
    ```bash
    git add .
    git commit -m "Initial commit"
-   git remote add origin https://github.com/bengittins/homebrew-mcp-manager.git
+   git remote add origin https://github.com/ihavespoons/homebrew-mcp-manager.git
    git push -u origin main
    ```
 
@@ -191,26 +191,26 @@ The GitHub Actions workflow automatically generates the formula with this struct
 ```ruby
 class McpManager < Formula
   desc "MCP (Model Context Protocol) server manager with Docker support"
-  homepage "https://github.com/bengittins/mcp-manager"
+  homepage "https://github.com/ihavespoons/mcp-manager"
   version "0.1.0"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/bengittins/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-darwin-arm64.tar.gz"
+      url "https://github.com/ihavespoons/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-darwin-arm64.tar.gz"
       sha256 "abc123..."
     else
-      url "https://github.com/bengittins/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-darwin-amd64.tar.gz"
+      url "https://github.com/ihavespoons/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-darwin-amd64.tar.gz"
       sha256 "def456..."
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/bengittins/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-linux-arm64.tar.gz"
+      url "https://github.com/ihavespoons/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-linux-arm64.tar.gz"
       sha256 "ghi789..."
     else
-      url "https://github.com/bengittins/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-linux-amd64.tar.gz"
+      url "https://github.com/ihavespoons/mcp-manager/releases/download/v0.1.0/mcp-manager-v0.1.0-linux-amd64.tar.gz"
       sha256 "jkl012..."
     end
   end

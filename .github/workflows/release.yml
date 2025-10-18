@@ -138,7 +138,7 @@ jobs:
     steps:
       - name: Update Homebrew formula
         env:
-          HOMEBREW_TAP_REPO: bengittins/homebrew-mcp-manager
+          HOMEBREW_TAP_REPO: ihavespoons/homebrew-mcp-manager
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.release.outputs.version }}
           DARWIN_AMD64_SHA: ${{ needs.release.outputs.darwin_amd64_sha }}
@@ -161,26 +161,26 @@ jobs:
           cat > Formula/mcp-manager.rb <<EOF
           class McpManager < Formula
             desc "MCP (Model Context Protocol) server manager with Docker support"
-            homepage "https://github.com/bengittins/mcp-manager"
+            homepage "https://github.com/ihavespoons/mcp-manager"
             version "${VERSION#v}"
             license "MIT"
 
             on_macos do
               if Hardware::CPU.arm?
-                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-darwin-arm64.tar.gz"
+                url "https://github.com/ihavespoons/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-darwin-arm64.tar.gz"
                 sha256 "${DARWIN_ARM64_SHA}"
               else
-                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-darwin-amd64.tar.gz"
+                url "https://github.com/ihavespoons/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-darwin-amd64.tar.gz"
                 sha256 "${DARWIN_AMD64_SHA}"
               end
             end
 
             on_linux do
               if Hardware::CPU.arm?
-                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-linux-arm64.tar.gz"
+                url "https://github.com/ihavespoons/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-linux-arm64.tar.gz"
                 sha256 "${LINUX_ARM64_SHA}"
               else
-                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-linux-amd64.tar.gz"
+                url "https://github.com/ihavespoons/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-linux-amd64.tar.gz"
                 sha256 "${LINUX_AMD64_SHA}"
               end
             end

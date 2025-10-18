@@ -42,18 +42,43 @@ The gateway acts as a bridge, accepting HTTP requests and spawning ephemeral MCP
 
 ## Installation
 
+### Homebrew (macOS and Linux)
+
+```bash
+brew tap ihavespoons/mcp-manager
+brew install mcp-manager
+```
+
+### Download Binaries
+
+Download pre-built binaries from the [releases page](https://github.com/ihavespoons/mcp-manager/releases):
+
+- **macOS**: `mcp-manager-vX.Y.Z-darwin-amd64.tar.gz` (Intel) or `mcp-manager-vX.Y.Z-darwin-arm64.tar.gz` (Apple Silicon)
+- **Linux**: `mcp-manager-vX.Y.Z-linux-amd64.tar.gz` (x86_64) or `mcp-manager-vX.Y.Z-linux-arm64.tar.gz` (ARM64)
+- **Windows**: `mcp-manager-vX.Y.Z-windows-amd64.zip`
+
+Extract and move to your PATH:
+```bash
+tar -xzf mcp-manager-*.tar.gz
+sudo mv mcp-manager /usr/local/bin/
+```
+
+All releases include SHA256 checksums for verification.
+
 ### From Source
 
 ```bash
-git clone https://github.com/bengittins/mcp-manager.git
+git clone https://github.com/ihavespoons/mcp-manager.git
 cd mcp-manager
+make build
+# or
 go build -o mcp-manager ./cmd/mcp-manager
 ```
 
 ### Prerequisites
 
-- Go 1.21 or later
-- Docker
+- Go 1.25.2 or later
+- Docker (for container-based servers)
 
 ## Quick Start
 
@@ -382,6 +407,10 @@ All containers are labeled with `managed-by=mcp-manager` for easy identification
 
 Comprehensive documentation is available in the `docs/` directory:
 
+### Release and Distribution
+- **[Release Process](docs/RELEASE.md)** - Complete guide to releasing new versions with GitHub Actions CI/CD and automated Homebrew tap updates
+- **[Homebrew Tap Setup](docs/HOMEBREW_TAP_SETUP.md)** - Detailed instructions for setting up and maintaining the Homebrew tap repository
+
 ### Implementation
 - **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete implementation history across all development phases, including:
   - Gateway implementation for HTTP-to-stdio bridging
@@ -397,6 +426,7 @@ Comprehensive documentation is available in the `docs/` directory:
 
 ### Project Configuration
 - **[CLAUDE.md](CLAUDE.md)** - Instructions for working with Claude Code and Serena MCP for enhanced development assistance
+- **[Serena Tools Guide](SERENA_TOOLS_GUIDE.md)** - Comprehensive reference for using Serena MCP semantic code tools effectively
 
 ## Contributing
 
