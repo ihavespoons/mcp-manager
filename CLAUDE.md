@@ -111,8 +111,33 @@ Claude: [Updates implementation_status.md with the new feature, files changed, a
 
 This practice ensures that future sessions have complete context about what has been implemented and why.
 
+## Serena Tools Reference
+
+For Claude Code: See **[SERENA_TOOLS_GUIDE.md](./SERENA_TOOLS_GUIDE.md)** for complete documentation of all Serena tools, including:
+- Detailed tool parameters and usage
+- Decision trees for choosing the right tool
+- Common workflows and patterns
+- Best practices for token-efficient code navigation
+
+### Quick Tool Reference
+
+**Understanding code without reading entire files:**
+- `get_symbols_overview` - See file structure before reading
+- `find_symbol` - Find and read specific functions/types/methods
+- `find_referencing_symbols` - Find where symbols are used
+
+**Precise code editing:**
+- `replace_symbol_body` - Replace entire function/method/type
+- `insert_after_symbol` / `insert_before_symbol` - Add new code
+- `rename_symbol` - Rename across entire codebase
+
+**Project context:**
+- `read_memory` / `write_memory` - Access project knowledge
+- Meta-cognitive tools - Reflect on progress and completeness
+
 ## Resources
 
 - [Claude Code Documentation](https://docs.anthropic.com/claude/docs/claude-code)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [Serena MCP](https://github.com/lastmile-ai/serena)
+- [Serena Tools Guide (this project)](./SERENA_TOOLS_GUIDE.md)

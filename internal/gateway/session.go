@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bengittins/mcp-manager/internal/config"
-	"github.com/bengittins/mcp-manager/internal/log"
+	"github.com/ihavespoons/mcp-manager/internal/config"
+	"github.com/ihavespoons/mcp-manager/internal/log"
 )
 
 // ServerInstance represents a running MCP server instance

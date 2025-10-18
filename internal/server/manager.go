@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bengittins/mcp-manager/internal/config"
-	"github.com/bengittins/mcp-manager/internal/docker"
+	"github.com/ihavespoons/mcp-manager/internal/config"
+	"github.com/ihavespoons/mcp-manager/internal/docker"
 )
 
 // Manager manages the lifecycle of MCP servers

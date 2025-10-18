@@ -1,4 +1,4 @@
-module github.com/bengittins/mcp-manager
+module github.com/ihavespoons/mcp-manager
 
 go 1.25.2
 

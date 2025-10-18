@@ -1,6 +1,6 @@
 # Implementation Status - Current
 
-Last Updated: 2025-10-17
+Last Updated: 2025-10-18
 
 ## Project Status: PRODUCTION READY ✅
 
@@ -25,334 +25,280 @@ Last Updated: 2025-10-17
 - `internal/gateway/spawner.go` - Unified spawning for containers and processes
 **Impact**: Enables Claude Code (or any HTTP client) to communicate with MCP servers regardless of how they're deployed (container vs process), providing maximum flexibility and consistent interface
 
-### Recent Updates (2025-10-17)
+### Recent Updates (2025-10-18)
 
-#### HTTP Container Readiness Check - IMPROVED ✅
-**Date**: 2025-10-17 (latest session)
-**Issue**: Previous TCP port check was insufficient - port accepted connections before HTTP server was ready
-**Root Cause**: TCP port opens when the server process binds to the port, but the HTTP application layer needs additional time to initialize before it can handle HTTP requests
-**User Impact**: First connection to context7 still failed even with TCP readiness check, required retry
-**Previous Approach**: Used `net.DialTimeout` to check if TCP port was accepting connections
-**Problem**: Container logs showed "Context7 Documentation MCP Server running on HTTP at http://localhost:8080/mcp" appeared AFTER the TCP port check completed, indicating the HTTP server wasn't fully initialized yet
+#### CI/CD and Release Infrastructure ✅
+**Date**: 2025-10-18 (afternoon session)
+**Purpose**: Implement automated build, release, and distribution pipeline
+**Motivation**: Enable easy installation via Homebrew and automated releases with security checksums
 
-**Improved Solution**: Replaced TCP port check with HTTP-level health check
+**Implementation**:
 
-**Implementation** (`internal/gateway/spawner.go:433-475`):
-```go
-// Create a temporary HTTP client with shorter timeout for health checks
-healthClient := &http.Client{
-    Timeout: 2 * time.Second,
-}
+1. **GitHub Actions CI Workflow** (`.github/workflows/ci.yml`):
+   - Runs on every push to main and on pull requests
+   - **Test job**: Runs `go vet`, `go test` with race detection and code coverage
+   - **Build job**: Cross-platform builds (linux/darwin/windows × amd64/arm64)
+   - **Format job**: Checks code formatting with `gofmt`
+   - Codecov integration for coverage reporting
 
-maxAttempts := 30 // 30 seconds max wait time  
-for i := 0; i < maxAttempts; i++ {
-    // Try to make an HTTP GET request to verify server is responding
-    // We don't care about the response code, just that the HTTP server is accepting requests
-    resp, err := healthClient.Get(s.httpURL)
-    if err == nil {
-        resp.Body.Close()
-        log.Info("HTTP server ready", map[string]interface{}{
-            "server_name":   serverConfig.Name,
-            "attempt":       i + 1,
-            "status_code":   resp.StatusCode,
-            "health_method": "http_get",
-        })
-        break
-    }
+2. **GitHub Actions Release Workflow** (`.github/workflows/release.yml`):
+   - **Trigger**: Runs on version tags (e.g., `v0.1.0`)
+   - **Build job**: Creates binaries for 5 platforms:
+     - linux-amd64, linux-arm64
+     - darwin-amd64 (Intel Mac), darwin-arm64 (Apple Silicon)
+     - windows-amd64
+   - Generates tar.gz (Unix) and zip (Windows) archives
+   - Creates SHA256 checksums for all archives
+   - Uses Go 1.25.2 with `-trimpath` and version ldflags
+   - **Release job**: Creates GitHub Release with all artifacts and auto-generated notes
+   - **Homebrew update job**: Automatically updates tap repository with new formula
 
-    // Log the error for debugging but continue retrying
-    log.Debug("HTTP health check failed, retrying", map[string]interface{}{
-        "server_name": serverConfig.Name,
-        "attempt":     i + 1,
-        "error":       err.Error(),
-    })
+3. **Homebrew Tap Automation**:
+   - Auto-generates `Formula/mcp-manager.rb` with platform-specific URLs and SHA256s
+   - Supports macOS (Intel + Apple Silicon) and Linux (AMD64 + ARM64)
+   - Formula includes installation, test commands, and metadata
+   - Uses GitHub Actions bot for commits
+   - Requires `HOMEBREW_TAP_TOKEN` secret configured
 
-    if i == maxAttempts-1 {
-        // Timeout - cleanup and fail
-        log.Error("HTTP server did not become ready", map[string]interface{}{
-            "server_name":  serverConfig.Name,
-            "container_id": containerID,
-            "timeout":      maxAttempts,
-            "last_error":   err.Error(),
-        })
-        gateway.docker.RemoveContainer(ctx, containerID, true)
-        return fmt.Errorf("HTTP server did not become ready after %d seconds: %w", maxAttempts, err)
-    }
+4. **Documentation**:
+   - **[RELEASE.md](docs/RELEASE.md)**: Complete release process guide
+     - Prerequisites (tap repository, GitHub secrets)
+     - Step-by-step release instructions
+     - Testing procedures
+     - Troubleshooting guide
+     - Future enhancements (SLSA3 provenance, code signing)
+   - **[HOMEBREW_TAP_SETUP.md](docs/HOMEBREW_TAP_SETUP.md)**: Detailed tap setup guide
+     - Repository structure and naming conventions
+     - GitHub token configuration
+     - Testing automation
+     - Formula customization (caveats, dependencies, services)
+     - Maintenance and troubleshooting
+   - **README.md**: Updated with installation methods (Homebrew, binaries, source)
 
-    time.Sleep(1 * time.Second)
-}
+**Files Created**:
+- `.github/workflows/ci.yml` - CI pipeline for testing and validation
+- `.github/workflows/release.yml` - Release pipeline with Homebrew automation
+- `docs/RELEASE.md` - Release process documentation (500+ lines)
+- `docs/HOMEBREW_TAP_SETUP.md` - Homebrew tap setup guide (400+ lines)
+- `README.md` (updated) - Added Homebrew and binary download installation instructions
+
+**Build Configuration**:
+- Uses Makefile ldflags: `-X main.version`, `-X main.commit`, `-X main.date`
+- Version flag working: `mcp-manager --version` outputs version info
+- Cross-compilation tested and working for all platforms
+
+**Security**:
+- SHA256 checksums generated for all release archives
+- Verifiable builds with checksums in release notes
+- Future: SLSA3 provenance attestation (documented in RELEASE.md)
+
+**Distribution**:
+- **GitHub Releases**: Primary distribution with all platforms
+- **Homebrew Tap**: `brew tap bengittins/mcp-manager && brew install mcp-manager`
+- **Direct Downloads**: Binaries available from releases page with checksums
+
+**Testing Requirements**:
+- CI runs on every PR and main branch push
+- Must pass: tests, vet, formatting checks
+- Cross-platform builds verified in CI
+
+**Release Process** (automated):
+```bash
+# Create and push tag
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+
+# GitHub Actions automatically:
+# 1. Builds for all platforms
+# 2. Creates GitHub Release
+# 3. Updates Homebrew tap
 ```
 
-**Key Improvements**:
-1. **HTTP-level check** - Makes actual HTTP GET request instead of just TCP dial
-2. **Application-layer verification** - Ensures HTTP server is processing requests, not just accepting connections
-3. **Increased timeout** - 2-second timeout per attempt (vs 1-second for TCP dial) to account for HTTP round-trip
-4. **Better logging** - Debug logs for failed attempts, includes status code on success
-5. **Better error messages** - Last error included in timeout message for easier debugging
-6. **Response agnostic** - Any HTTP response (200, 404, 500, etc.) indicates the server is responding
-
-**Files Changed**:
-- `internal/gateway/spawner.go:3-16` - Removed `net` import (no longer needed)
-- `internal/gateway/spawner.go:433-475` - Replaced TCP dial with HTTP GET health check
-
-**Why This Works**:
-- TCP port can accept connections while HTTP server is still initializing its application logic
-- HTTP GET request requires the full HTTP server stack to be operational
-- Even error responses (404, 500) indicate the HTTP server is processing requests
-- This matches the timing of when context7 logs "running on HTTP" message
-
-**Testing**:
-- Built successfully ✅
-- Ready for testing via Claude Code (requires Claude Code to restart and connect)
+**Impact**:
+- **Professional distribution** - Users can install via Homebrew or download binaries
+- **Automated releases** - No manual steps required for releases
+- **Security** - SHA256 checksums for all downloads
+- **Multi-platform support** - macOS (Intel/ARM), Linux (AMD64/ARM64), Windows
+- **Zero-friction updates** - Homebrew tap automatically updated on new releases
+- **Quality assurance** - CI prevents bad code from being merged
 
 **Benefits**:
-- **Eliminates first-connection failures completely** - Waits for HTTP server to be fully ready
-- **More accurate readiness detection** - Checks application layer, not just network layer
-- **Better diagnostics** - Logs show status codes and errors for debugging
-- **Robust detection** - Works with any HTTP-based MCP server regardless of startup time
+- Reduces manual release work to single `git tag` command
+- Ensures consistent, reproducible builds
+- Professional package management via Homebrew
+- Automatic version tagging in binaries
+- Comprehensive documentation for maintainers
 
-**Impact**:
-- **Fixes the reported issue** - First connection to context7 should now succeed immediately
-- **More reliable** - HTTP-level check is the correct abstraction for HTTP servers
-- **Better UX** - No more confusing first-connection failures
+#### Serena MCP Tools Documentation ✅
+**Date**: 2025-10-18 (morning session)
+**Purpose**: Comprehensive reference guide for Claude Code to use Serena semantic code tools effectively
+**Motivation**: Enable token-efficient code navigation, precise editing, and better project memory utilization
+**Implementation**:
+- Created `SERENA_TOOLS_GUIDE.md` - Complete reference documentation (594 lines, 18KB+)
+- Updated `CLAUDE.md` - Added quick reference and link to detailed guide
+- Updated `README.md` - Added Serena Tools Guide to documentation section
 
-#### HTTP Transport Bug Fixes ✅
-**Date**: 2025-10-17 (afternoon session)
-**Issue**: context7 and other HTTP-native MCP servers failing to connect through gateway
-**Root Causes**:
-1. Notifications not handled properly - gateway returning errors for `notifications/initialized`
-2. Server reuse logic broken for HTTP transport - always marked as "stale"
-3. HTTP status code check too strict - only accepting 200, not 202 (Accepted)
-4. Missing Accept headers - HTTP servers require `application/json, text/event-stream`
-5. SSE response parsing - context7 returns Server-Sent Events format needing extraction
+**Documentation Contents**:
+1. **Tool Categories** (21 tools total):
+   - File System Navigation (list_dir, find_file)
+   - Code Understanding (get_symbols_overview, find_symbol, find_referencing_symbols, search_for_pattern)
+   - Code Editing (replace_symbol_body, insert_after_symbol, insert_before_symbol, rename_symbol)
+   - Project Memory (list_memories, read_memory, write_memory, delete_memory)
+   - Meta-Cognitive (think_about_collected_information, think_about_task_adherence, think_about_whether_you_are_done)
+   - Onboarding (check_onboarding_performed, onboarding)
 
-**Fixes Applied**:
-1. **Notifications Handler** (`internal/mcpserver/server.go:74-98`)
-   - Added `notifications/initialized` case to handleMessage
-   - Check for `msg.ID == nil` to detect notifications
-   - Return nil for notifications (no response per JSON-RPC 2.0 spec)
-   - Prevents "invalid_union" schema validation errors
+2. **Decision Trees**:
+   - When to read files vs use symbolic tools
+   - Which search tool to use for different scenarios
+   - Which edit tool to use based on edit type
 
-2. **Server Reuse Logic** (`internal/gateway/session.go:59-87`)
-   - Added transport-aware health checking
-   - HTTP transport: Check `httpClient != nil && httpURL != ""`
-   - Stdio transport: Check `stdin != nil && stdout != nil`
-   - Prevents HTTP servers from being destroyed/recreated every request
+3. **Common Workflows** (4 patterns):
+   - Understanding new files
+   - Finding and editing symbols
+   - Adding new features
+   - Refactoring/renaming
 
-3. **HTTP Status Codes** (`internal/gateway/session.go:349-356`)
-   - Changed from `!= 200` to `< 200 || >= 300`
-   - Now accepts all 2xx success codes (200, 201, 202, 204, etc.)
-   - context7 uses 202 Accepted for SSE responses
+4. **Best Practices**:
+   - Start with get_symbols_overview before reading files
+   - Use include_body=false to see signatures first
+   - Call meta-cognitive tools at key workflow points
+   - Update memories after implementation work
+   - Use relative_path to restrict searches
 
-4. **Accept Headers** (`internal/gateway/session.go:323-324`)
-   - Added `Accept: application/json, text/event-stream`
-   - Required by context7 and other SSE-based servers
-   - Prevents 406 Not Acceptable errors
-
-5. **SSE Response Parsing** (`internal/gateway/session.go:356-374`)
-   - Detect SSE format: `event: message\ndata: {...}`
-   - Extract JSON from `data:` line
-   - Return clean JSON-RPC response to client
-   - Handles context7's Server-Sent Events format
+5. **Complete Parameter Documentation**:
+   - LSP symbol kind reference (1-26)
+   - Name path matching logic
+   - Pattern matching behavior
+   - Performance tips
+   - Examples for every tool
 
 **Files Changed**:
-- `internal/mcpserver/server.go:74-98` - Notification handling
-- `internal/gateway/session.go:59-87` - Server reuse logic
-- `internal/gateway/session.go:323-324` - Accept headers
-- `internal/gateway/session.go:349-356` - Status code check
-- `internal/gateway/session.go:356-374` - SSE parsing
+- `SERENA_TOOLS_GUIDE.md` - New comprehensive guide (594 lines)
+- `CLAUDE.md:114-143` - Added Serena tools reference section
+- `README.md:427-429` - Added guide to documentation index
 
-**Testing**:
-- ✅ context7 connects successfully via `/mcp` command (after readiness fix)
-- ✅ sequential-thinking connects successfully (stdio transport)
-- ✅ Both HTTP and stdio transports working simultaneously
-- ✅ Server instances reused properly (no recreation loops)
+**Benefits**:
+- **Token efficiency** - Claude Code can navigate code without reading entire files
+- **Precise operations** - Symbol-level editing instead of regex-based
+- **Better decisions** - Clear guidance on when to use which tool
+- **Consistent patterns** - Documented workflows for common tasks
+- **Project continuity** - Better memory management practices
 
 **Impact**:
-- **HTTP transport now fully functional** - Can connect to HTTP-native MCP servers
-- **Dual transport support** - HTTP and stdio work together seamlessly
-- **Production ready** - Both transport types tested and verified
+- Future Claude Code sessions will use Serena tools more effectively
+- Reduced token consumption through smarter code navigation
+- More precise code edits with fewer errors
+- Better project knowledge retention across sessions
+
+### Previous Updates (2025-10-17)
+
+#### HTTP Container Readiness Check - IMPROVED ✅
+**Date**: 2025-10-17
+**Issue**: Previous TCP port check was insufficient - port accepted connections before HTTP server was ready
+**Solution**: Replaced TCP port check with HTTP-level health check using HTTP GET requests
+**Impact**: Eliminates first-connection failures completely - waits for HTTP server to be fully ready
+**Files**: `internal/gateway/spawner.go:433-475`
+
+#### HTTP Transport Bug Fixes ✅
+**Date**: 2025-10-17
+**Issue**: context7 and other HTTP-native MCP servers failing to connect through gateway
+**Fixes**: Notifications handling, server reuse logic, HTTP status codes, Accept headers, SSE parsing
+**Impact**: HTTP transport now fully functional, dual transport support (HTTP + stdio) working seamlessly
+**Files**: Multiple files in `internal/mcpserver/` and `internal/gateway/`
 
 #### HTTP Path Configuration Support ✅
 **Feature**: Support for containers that expose HTTP endpoints at specific paths
-**Use Case**: Containers like context7 that have internal HTTP endpoints at paths like `/mcp`
 **Solution**: Added `http_path` configuration field for servers
-**Changes**:
-- Added `HTTPPath` field to `Server` struct in `internal/config/config.go:32`
-- Updated `ServerFromConfig` in `internal/claudecode/config.go:174-181` to append `http_path` to registration URL
-- Updated gateway path parsing in `internal/gateway/gateway.go:133-147` to extract only first segment as server name
-- Added context7 example to `test-config.yaml:82-105` demonstrating usage
-- Updated `README.md:245-247` with documentation
-**Example Configuration**:
-```yaml
-- name: context7
-  enabled: true
-  docker:
-    image: mcp/context7
-  http_path: /mcp  # Registers as http://localhost:52080/mcp/context7/mcp
-```
-**Files**:
-- `internal/config/config.go:32` - HTTPPath field added to Server struct
-- `internal/claudecode/config.go:174-181` - URL construction with http_path
-- `internal/gateway/gateway.go:133-147` - Path parsing logic
-- `test-config.yaml:82-105` - context7 example with http_path
-- `README.md:245-247` - Documentation
-**Impact**: Containers with HTTP endpoints at specific paths can now be properly registered and routed through mcp-manager gateway
+**Impact**: Containers with HTTP endpoints at specific paths can now be properly registered and routed
 
 ### Previous Updates (2025-10-16)
 
 #### Auto-Sync Configuration Cleanup ✅
-**Issue**: When servers were removed from mcp-config.yaml, they remained registered in Claude Code
-**Root Cause**: `registerWithClaudeCode()` only added servers but never removed old ones
-**Solution**: Enhanced auto-sync to detect and remove stale mcp-manager servers
-**Changes**:
-- Added cleanup logic before registering servers
-- Identifies mcp-manager servers by:
-  - Name "mcp-manager" (the stdio server)
-  - Type "http" with URL pattern `http://localhost:{port}/mcp/{name}`
-- Preserves external servers (e.g., serena) that don't match pattern
-- Removes any mcp-manager servers no longer in config
-**Files**: `cmd/mcp-manager/main.go:124-151` - Cleanup logic in registerWithClaudeCode
 **Impact**: Configuration stays in perfect sync - removing servers from config automatically unregisters them
 
 #### Mixed Mode Gateway (Per-Server Spawn Method) ✅
-**Issue**: Global `gateway_mode` setting forced all servers to use same spawn method
-**Solution**: Removed global mode, implemented per-server automatic detection
-**Changes**:
-- Removed `gateway_mode` from Gateway struct and Config struct
-- Updated spawn logic to detect mode per-server: `useContainer := serverConfig.Docker.Image != ""`
-- Servers with `docker.image` → spawn as containers
-- Servers without `docker.image` → spawn as processes
-- Gateway status now shows "mixed (per-server)" mode
-- Updated status tool to show `[container]` or `[process]` per server
-**Files**: 
-- `internal/gateway/gateway.go:14-31, 37-45, 81-91` - Removed Mode field
-- `internal/gateway/session.go:97-106` - Per-server detection logic
-- `internal/mcpserver/server.go:266-282` - Updated status output
-- `cmd/mcp-manager/main.go:481-484, 547-550` - Removed mode from config
-- `mcp-config.yaml:13-14` - Added deprecation comment
 **Impact**: Can now mix container and process servers in same gateway, automatic mode selection
 
 #### Auto-Registration on Startup ✅
-**Issue**: Registration required manual `register` command, could get out of sync with config
-**Solution**: Automatically register with Claude Code when `serve` command starts
-**Changes**:
-- Extracted registration logic into `registerWithClaudeCode()` helper function
-- Added auto-registration call in `serve` command startup (before gateway starts)
-- Simplified `register` command to use shared helper
-- Registration now updates automatically whenever config changes
-- Warnings instead of errors for registration failures (doesn't block startup)
-**Files**:
-- `cmd/mcp-manager/main.go:81-174` - `registerWithClaudeCode()` function with cleanup
-- `cmd/mcp-manager/main.go:595-599` - Auto-registration in serve command
-- `cmd/mcp-manager/main.go:713-756` - Simplified register command
 **Impact**: Zero-friction registration, always in sync with config, better UX
 
 ### Previous Updates (2025-10-15)
 
 #### Container Lifecycle Management ✅
-**Issue**: Docker containers remained running after Claude Code stopped the MCP manager
-**Fix**: Implemented comprehensive cleanup system
-**Changes**:
-- Added signal handlers (SIGTERM, SIGINT) to `serve` command for graceful shutdown
-- Added `cleanupStaleContainers()` function that runs on startup
-- Enhanced all shutdown paths to properly call `gateway.Stop()` → `ServerManager.StopAll()`
-- Each `ServerInstance.Stop()` now force removes its Docker container
-**Files**: `cmd/mcp-manager/main.go:146-176, 555-682`
 **Impact**: Clean container lifecycle with no orphaned containers
 
 #### Registration Fix ✅
-**Issue**: `register` command only registered `mcp-manager` itself, not individual MCP servers
-**Fix**: Updated `register` and `unregister` commands to properly register all enabled servers
-**Impact**: Individual MCP servers (git, sequential-thinking) now accessible in Claude Code
+**Impact**: Individual MCP servers now accessible in Claude Code
 
 ### Completed Components
 
 #### 1. Configuration System ✅
 - **Location**: `internal/config/`
-- **Features**:
-  - YAML configuration loading with validation
-  - Environment variable expansion
-  - Default values (gateway_mode is now deprecated/ignored)
-  - Gateway port configuration (default: 52080)
-  - **HTTP path configuration** for containers with HTTP endpoints
+- YAML configuration loading with validation
+- Environment variable expansion
+- Gateway port configuration (default: 52080)
+- HTTP path configuration for containers with HTTP endpoints
 
 #### 2. Docker Management ✅
 - **Location**: `internal/docker/`
-- **Features**:
-  - Docker client with API version negotiation
-  - Image pulling with policies (never, if-not-present, always)
-  - Container lifecycle (create, start, stop, remove, attach)
-  - Stream demultiplexing for Docker attach
-  - Network management
-  - Container listing with label filtering (`managed-by=mcp-manager`)
+- Docker client with API version negotiation
+- Image pulling with policies
+- Container lifecycle management
+- Stream demultiplexing for Docker attach
+- Container labeling for easy identification
 
 #### 3. Gateway (HTTP Transport & HTTP-to-stdio Bridge) ✅
 - **Location**: `internal/gateway/`
-- **Components**:
-  - `gateway.go` - HTTP server (/mcp, /health, /servers) with graceful shutdown
-  - `session.go` - Server instance management with per-server mode detection
-  - `spawner.go` - Process AND container spawning with HTTP health checks
-  - `protocol.go` - JSON-RPC 2.0 message handling over HTTP
-- **Transport**:
-  - **HTTP transport** for MCP protocol (JSON-RPC 2.0 over HTTP)
-  - Bridges HTTP requests to stdio communication with backend servers
-  - Supports both Docker-based and non-Docker servers seamlessly
-  - **Path-based routing** with support for custom HTTP paths
-- **Modes**:
-  - **Mixed mode** (default): Automatically detects per-server based on config
-  - Servers with `docker.image` use container mode
-  - Servers without `docker.image` use process mode
-- **Lifecycle**:
-  - Persistent server instances (one per server name)
-  - **HTTP-level readiness checks** for container startup
-  - Automatic cleanup on gateway shutdown
-  - Container removal on instance stop
+- HTTP server with JSON-RPC 2.0 over HTTP
+- Supports both Docker-based and non-Docker servers
+- Per-server mode detection (containers vs processes)
+- HTTP-level readiness checks for container startup
+- Path-based routing with custom HTTP paths
 
 #### 4. Container Lifecycle Management ✅
-- **Location**: `cmd/mcp-manager/main.go`, `internal/gateway/session.go`
-- **Features**:
-  - Signal handling for graceful shutdown (SIGTERM, SIGINT)
-  - Startup cleanup of stale containers
-  - Force removal of containers on shutdown
-  - All containers labeled with `managed-by=mcp-manager`
-  - Three shutdown paths all properly clean up:
-    1. Normal stdin close (Claude Code disconnect)
-    2. Signal interruption (SIGTERM/SIGINT)
-    3. Context cancellation (gateway errors)
+- Signal handling for graceful shutdown (SIGTERM, SIGINT)
+- Startup cleanup of stale containers
+- Force removal of containers on shutdown
+- Three shutdown paths all properly clean up
 
 #### 5. MCP Server (mcp-manager as MCP Server) ✅
 - **Location**: `internal/mcpserver/`
-- **Innovation**: mcp-manager runs AS an MCP server itself
-- **Tools**:
-  - `list_servers` - List configured servers
-  - `server_status` - Get server status
-  - `gateway_status` - Get gateway info (shows mixed mode and per-server types)
+- mcp-manager runs AS an MCP server itself
+- Tools: list_servers, server_status, gateway_status
 
 #### 6. Claude Code Integration ✅
 - **Location**: `internal/claudecode/config.go`, `cmd/mcp-manager/main.go`
-- **Commands**:
-  - `register` - Manually register mcp-manager AND all enabled servers
-  - `unregister` - Remove mcp-manager and all servers from Claude Code
-  - `serve` - **Auto-registers on startup with cleanup**, runs as MCP server with integrated gateway
-- **Registration**:
-  - **Automatic**: Every time `serve` starts, registration is updated
-  - **Auto-cleanup**: Removes stale mcp-manager servers from Claude Code config
-  - `mcp-manager` → stdio server (provides management tools)
-  - Each enabled server → HTTP endpoint at `http://localhost:{port}/mcp/{server-name}[{http_path}]`
-  - Gateway port configurable via settings.gateway_port
-  - Preserves external servers (e.g., serena) during cleanup
-  - **Supports custom HTTP paths** via `http_path` configuration
-- **Benefits**:
-  - No manual registration needed
-  - Always in sync with config
-  - Enable/disable servers → automatically updates registration
-  - Remove servers from config → automatically unregisters from Claude Code
+- Automatic registration on startup with cleanup
+- Removes stale servers, preserves external servers
+- Supports custom HTTP paths via configuration
 
 #### 7. CLI Commands ✅
-- Container management: start, stop, status, list, logs, update, validate
-- Gateway: `gateway` command (standalone), `serve` command (as MCP server with auto-registration and cleanup)
-- Integration: `register` (manual with cleanup), `unregister`
+- **Location**: `cmd/mcp-manager/main.go`
+- Commands: serve, register, unregister, validate, and more
+- Version flag support with build metadata
+
+#### 8. CI/CD and Release Infrastructure ✅
+- **Location**: `.github/workflows/`
+- **CI Pipeline**: Test, build, format checks on every push/PR
+- **Release Pipeline**: Automated multi-platform builds with GitHub Releases
+- **Homebrew Automation**: Auto-updates tap repository on releases
+- **Documentation**: Complete guides for release process and tap setup
+
+#### 9. Documentation ✅
+- **Location**: Root directory and docs/
+- **Files**:
+  - `README.md` - User guide with installation methods
+  - `CLAUDE.md` - Serena and Claude Code integration guide
+  - `SERENA_TOOLS_GUIDE.md` - Comprehensive Serena tools reference (594 lines)
+  - `docs/RELEASE.md` - Release process guide (500+ lines)
+  - `docs/HOMEBREW_TAP_SETUP.md` - Homebrew tap setup guide (400+ lines)
+  - `docs/IMPLEMENTATION_SUMMARY.md` - Implementation details
+- **Coverage**:
+  - Installation (Homebrew, binaries, source)
+  - Configuration examples
+  - Release and distribution processes
+  - Serena tools reference with decision trees
+  - Homebrew tap setup and maintenance
 
 ### Current Configuration (mcp-config.yaml)
 
@@ -363,10 +309,6 @@ for i := 0; i < maxAttempts; i++ {
 **Enabled MCP Servers**:
 1. **context7** - `mcp/context7:latest` → `http://localhost:52080/mcp/context7` [container, HTTP transport]
 2. **sequential-thinking** - `mcp/sequentialthinking:latest` → `http://localhost:52080/mcp/sequential-thinking` [container, stdio transport]
-
-**Previously Configured** (removed 2025-10-16):
-- ~~filesystem~~ - Removed from config, automatically unregistered from Claude Code ✅
-- ~~git~~ - Removed from config in recent cleanup
 
 ### Architecture
 
@@ -382,142 +324,96 @@ HTTP Gateway (JSON-RPC 2.0 over HTTP, mixed mode)
     ├─ /mcp/context7 → context7 MCP server [container, HTTP] (persistent, HTTP endpoint)
     └─ /mcp/sequential-thinking → sequential-thinking MCP server [container, stdio] (persistent, stdio)
 
-HTTP Transport Flow (stdio backend):
-    Claude Code → HTTP POST /mcp/sequential-thinking → Gateway → stdio → container → stdio → Gateway → HTTP response
-
-HTTP Transport Flow (HTTP backend):
-    Claude Code → HTTP POST /mcp/context7 → Gateway → HTTP → container HTTP server → HTTP → Gateway → HTTP response
-
-Container Readiness Flow:
-    1. Gateway spawns container
-    2. Container starts, port mapping obtained
-    3. **HTTP health check loop** (up to 30 seconds):
-       - Make HTTP GET request to container URL
-       - If success (any HTTP response) → ready ✅
-       - If error → wait 1 second, retry
-    4. Return ServerInstance (HTTP server is verified ready)
-    5. First client request → immediate success 🎉
-
-Shutdown Flow:
-    Claude Code stops → SIGTERM/stdin close
+Release Flow:
+    git tag v0.1.0 → git push
     ↓
-    serve command catches signal
+    GitHub Actions: Release Workflow
     ↓
-    gateway.Stop() → ServerManager.StopAll()
+    Build (5 platforms) → Create Release → Update Homebrew Tap
     ↓
-    Each ServerInstance.Stop() removes its container
-    ↓
-    Clean shutdown ✅
+    Users: brew install bengittins/mcp-manager/mcp-manager
 ```
-
-### Key Files
-
-**HTTP Readiness Check**:
-- `internal/gateway/spawner.go:433-475` - HTTP GET health check implementation
-- `internal/gateway/spawner.go:3-16` - Imports (removed `net`, kept `net/http`)
-
-**HTTP Path Configuration**:
-- `internal/config/config.go:32` - HTTPPath field in Server struct
-- `internal/claudecode/config.go:174-181` - URL construction with http_path appended
-- `internal/gateway/gateway.go:133-147` - Path parsing to extract server name from URL
-
-**HTTP Transport Implementation**:
-- `internal/gateway/gateway.go` - HTTP server with /mcp endpoints
-- `internal/gateway/protocol.go` - JSON-RPC 2.0 over HTTP handling
-- `internal/gateway/session.go` - HTTP-to-stdio bridge and session management
-- `internal/gateway/spawner.go` - Unified spawner with HTTP health checks
-
-**Auto-Sync Configuration Cleanup**:
-- `cmd/mcp-manager/main.go:124-151` - Cleanup logic in registerWithClaudeCode
-
-**Mixed Mode Gateway**:
-- `internal/gateway/session.go:97-106` - Per-server mode detection
-
-**Auto-Registration**:
-- `cmd/mcp-manager/main.go:81-174` - `registerWithClaudeCode()` helper with cleanup
-- `cmd/mcp-manager/main.go:595-599` - Auto-registration in serve
-
-**Container Lifecycle**:
-- `cmd/mcp-manager/main.go:146-176` - cleanupStaleContainers function
-- `internal/gateway/session.go:158-167` - ServerManager.StopAll
-
-**Configuration**:
-- `mcp-config.yaml` - Main config with context7 and sequential-thinking
-
-**Documentation**:
-- `README.md` - Complete user guide
-- `CLAUDE.md` - Serena and Claude Code integration
-- `docs/IMPLEMENTATION_SUMMARY.md` - Implementation details
 
 ### Development Commands
 
 **Build & Test**:
 ```bash
-make build      # Build binary (done ✅)
+make build      # Build binary
 make test       # Run all tests
 make fmt        # Format code
 make vet        # Static analysis
 ```
 
-**Usage**:
+**Release**:
 ```bash
-# Restart Claude Code to test the fix
-# Or manually restart serve (loses Claude Code connection):
-./mcp-manager serve --config mcp-config.yaml
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+# GitHub Actions handles the rest
 ```
 
 ### Roadmap Status
 
 **Completed** ✅:
 - [x] Config validation
-- [x] **HTTP transport implementation (JSON-RPC 2.0 over HTTP)**
-- [x] **HTTP path configuration for containers with HTTP endpoints**
-- [x] **HTTP-level readiness checks for container startup**
-- [x] **HTTP-to-stdio bridge for Docker and non-Docker servers**
+- [x] HTTP transport implementation (JSON-RPC 2.0 over HTTP)
+- [x] HTTP path configuration for containers with HTTP endpoints
+- [x] HTTP-level readiness checks for container startup
+- [x] HTTP-to-stdio bridge for Docker and non-Docker servers
 - [x] Gateway (mixed mode with per-server detection)
 - [x] JSON-RPC 2.0 protocol
 - [x] Session management
 - [x] Claude Code integration
 - [x] Docker Hub image integration
 - [x] Individual server registration
-- [x] **Auto-registration on startup**
-- [x] **Auto-sync configuration cleanup**
+- [x] Auto-registration on startup
+- [x] Auto-sync configuration cleanup
 - [x] Container lifecycle management
 - [x] Graceful shutdown with cleanup
 - [x] Signal handling
-- [x] **Per-server spawn mode detection**
+- [x] Per-server spawn mode detection
+- [x] Comprehensive Serena tools documentation
+- [x] **GitHub Actions CI/CD pipeline**
+- [x] **Automated multi-platform releases**
+- [x] **Homebrew tap with auto-updates**
+- [x] **Release and distribution documentation**
 
 **In Progress** 🚧:
 - [ ] Production logging (currently uses structured JSON logging)
 - [ ] Metrics/monitoring
 
 **Planned** 📋:
+- [ ] SLSA3 provenance attestation for supply-chain security
+- [ ] Code signing for macOS binaries
+- [ ] Notarization for macOS Gatekeeper
+- [ ] Windows code signing
+- [ ] Additional package managers (apt, rpm, chocolatey)
+- [ ] Docker images to GitHub Container Registry
+- [ ] Automated changelog generation
 - [ ] Health monitoring for persistent containers
 - [ ] SSE streaming support
 - [ ] Connection pooling
 
-### Known Limitations
-
-1. **No guaranteed loading order** - JSON object keys have no order, but Claude Code likely retries failed connections
-2. **100ms startup delay** - Gateway starts in background with brief delay
-3. **No restart policies** - Containers are ephemeral, removed on shutdown (by design)
-4. **gateway_mode config** - Still exists in config struct for backward compatibility but is ignored
-
 ### Production Readiness
 
-**Status**: READY FOR PRODUCTION 🚀
+**Status**: READY FOR PRODUCTION WITH AUTOMATED RELEASES 🚀
 
 - ✅ **HTTP transport implemented and working**
 - ✅ **HTTP path configuration for container endpoints**
-- ✅ **HTTP-level readiness checks** - Ensures first connection succeeds
+- ✅ **HTTP-level readiness checks**
 - ✅ **Supports Docker-based servers (containers)**
 - ✅ **Supports non-Docker servers (processes)**
 - ✅ **Auto-registration implemented**
 - ✅ **Auto-sync configuration cleanup implemented**
 - ✅ **Mixed mode gateway with per-server detection**
+- ✅ **Comprehensive tool documentation for Claude Code**
+- ✅ **CI/CD pipeline with automated testing**
+- ✅ **Automated multi-platform releases**
+- ✅ **Homebrew tap with auto-updates**
+- ✅ **Professional distribution channels**
+- ✅ **Security checksums for all releases**
 - ✅ Config validation
 - ✅ Error handling
-- ✅ Documentation updated
+- ✅ Documentation complete and comprehensive
 - ✅ Integration with Claude Code working
 - ✅ Container lifecycle properly managed
 - ✅ Graceful shutdown implemented
@@ -527,17 +423,26 @@ make vet        # Static analysis
 ### Success Criteria Met
 
 - ✅ **HTTP transport working for all MCP servers**
-- ✅ **HTTP path support for containers with HTTP endpoints**
-- ✅ **First connection succeeds immediately** (HTTP health check fix)
+- ✅ **First connection succeeds immediately**
 - ✅ **Docker-based servers accessible via HTTP**
 - ✅ **Non-Docker servers accessible via HTTP**
-- ✅ `mcp-manager` registered as stdio server
-- ✅ Individual servers registered as HTTP endpoints
 - ✅ **Auto-registration keeps config in sync**
-- ✅ **Auto-cleanup removes stale servers**
 - ✅ **External servers (serena) preserved during cleanup**
 - ✅ **Mixed mode allows flexible server configuration**
+- ✅ **Claude Code has comprehensive Serena tools documentation**
+- ✅ **Professional release pipeline**
+- ✅ **Automated Homebrew tap updates**
+- ✅ **Multi-platform binary distribution**
+- ✅ **Comprehensive release and setup documentation**
 - ✅ Gateway routing works correctly
 - ✅ Documentation updated and accurate
 - ✅ Containers cleaned up on shutdown
 - ✅ Signal handling for graceful shutdown
+
+### Next Steps for First Release
+
+1. **Create Homebrew tap repository**: `bengittins/homebrew-mcp-manager`
+2. **Configure GitHub secrets**: Add `HOMEBREW_TAP_TOKEN` to main repository
+3. **Create first release**: `git tag v0.1.0 && git push origin v0.1.0`
+4. **Test installation**: `brew tap bengittins/mcp-manager && brew install mcp-manager`
+5. **Verify functionality**: `mcp-manager --version && mcp-manager validate`

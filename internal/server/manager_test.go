@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bengittins/mcp-manager/internal/config"
-	"github.com/bengittins/mcp-manager/internal/docker"
+	"github.com/ihavespoons/mcp-manager/internal/config"
+	"github.com/ihavespoons/mcp-manager/internal/docker"
 )
 
 func TestNewManager(t *testing.T) {

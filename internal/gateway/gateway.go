@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/bengittins/mcp-manager/internal/config"
-	"github.com/bengittins/mcp-manager/internal/docker"
-	"github.com/bengittins/mcp-manager/internal/log"
+	"github.com/ihavespoons/mcp-manager/internal/config"
+	"github.com/ihavespoons/mcp-manager/internal/docker"
+	"github.com/ihavespoons/mcp-manager/internal/log"
 )
 
 // Gateway manages MCP client connections and server lifecycle

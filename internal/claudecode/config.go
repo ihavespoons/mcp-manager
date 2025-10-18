@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bengittins/mcp-manager/internal/config"
+	"github.com/ihavespoons/mcp-manager/internal/config"
 )
 
 // MCPServer represents an MCP server configuration for Claude Code

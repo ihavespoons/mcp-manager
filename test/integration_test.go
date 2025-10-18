@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package test
@@ -12,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bengittins/mcp-manager/internal/config"
-	"github.com/bengittins/mcp-manager/internal/gateway"
+	"github.com/ihavespoons/mcp-manager/internal/config"
+	"github.com/ihavespoons/mcp-manager/internal/gateway"
 )
 
 // TestFilesystemServerIntegration tests the full gateway with the filesystem MCP server
