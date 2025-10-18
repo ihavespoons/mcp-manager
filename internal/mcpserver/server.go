@@ -9,8 +9,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/ihavespoons/mcp-manager/internal/config"
-	"github.com/ihavespoons/mcp-manager/internal/gateway"
+	"github.com/bengittins/mcp-manager/internal/config"
+	"github.com/bengittins/mcp-manager/internal/gateway"
 )
 
 // Server implements an MCP server that communicates over stdio

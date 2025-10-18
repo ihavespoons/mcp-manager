@@ -11,12 +11,12 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/ihavespoons/mcp-manager/internal/claudecode"
-	"github.com/ihavespoons/mcp-manager/internal/config"
-	"github.com/ihavespoons/mcp-manager/internal/docker"
-	"github.com/ihavespoons/mcp-manager/internal/gateway"
-	"github.com/ihavespoons/mcp-manager/internal/mcpserver"
-	"github.com/ihavespoons/mcp-manager/internal/server"
+	"github.com/bengittins/mcp-manager/internal/claudecode"
+	"github.com/bengittins/mcp-manager/internal/config"
+	"github.com/bengittins/mcp-manager/internal/docker"
+	"github.com/bengittins/mcp-manager/internal/gateway"
+	"github.com/bengittins/mcp-manager/internal/mcpserver"
+	"github.com/bengittins/mcp-manager/internal/server"
 	"github.com/spf13/cobra"
 )
 

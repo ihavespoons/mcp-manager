@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ihavespoons/mcp-manager/internal/config"
-	"github.com/ihavespoons/mcp-manager/internal/docker"
-	"github.com/ihavespoons/mcp-manager/internal/log"
+	"github.com/bengittins/mcp-manager/internal/config"
+	"github.com/bengittins/mcp-manager/internal/docker"
+	"github.com/bengittins/mcp-manager/internal/log"
 )
 
 // spawnContainer spawns an MCP server in a Docker container (persistent, one per server)

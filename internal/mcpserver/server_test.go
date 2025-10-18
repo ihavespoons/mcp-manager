@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ihavespoons/mcp-manager/internal/config"
+	"github.com/bengittins/mcp-manager/internal/config"
 )
 
 func TestServer_handleInitialize(t *testing.T) {
