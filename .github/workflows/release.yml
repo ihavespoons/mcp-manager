@@ -1,0 +1,201 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write # For SLSA provenance
+
+jobs:
+  # Build binaries for all platforms
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.2'
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+
+          # Extract version from tag
+          VERSION=${GITHUB_REF#refs/tags/}
+
+          # Set binary name
+          BINARY_NAME="mcp-manager"
+          if [ "$GOOS" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+
+          # Build with version information
+          go build -trimpath -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o "dist/${BINARY_NAME}" \
+            ./cmd/mcp-manager
+
+          # Create archive
+          cd dist
+          if [ "$GOOS" = "windows" ]; then
+            ARCHIVE_NAME="mcp-manager-${VERSION}-${GOOS}-${GOARCH}.zip"
+            zip "${ARCHIVE_NAME}" "${BINARY_NAME}"
+          else
+            ARCHIVE_NAME="mcp-manager-${VERSION}-${GOOS}-${GOARCH}.tar.gz"
+            tar czf "${ARCHIVE_NAME}" "${BINARY_NAME}"
+          fi
+
+          # Generate checksums
+          sha256sum "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-manager-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          retention-days: 1
+
+  # Create GitHub release with all artifacts
+  release:
+    name: Create GitHub Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract_version.outputs.version }}
+      darwin_amd64_sha: ${{ steps.checksums.outputs.darwin_amd64_sha }}
+      darwin_arm64_sha: ${{ steps.checksums.outputs.darwin_arm64_sha }}
+      linux_amd64_sha: ${{ steps.checksums.outputs.linux_amd64_sha }}
+      linux_arm64_sha: ${{ steps.checksums.outputs.linux_arm64_sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: extract_version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec cp {} release/ \;
+          ls -lah release/
+
+      - name: Extract checksums
+        id: checksums
+        run: |
+          VERSION="${{ steps.extract_version.outputs.version }}"
+
+          # Extract SHA256 for each platform
+          DARWIN_AMD64_SHA=$(cat release/mcp-manager-${VERSION}-darwin-amd64.tar.gz.sha256 | cut -d' ' -f1)
+          DARWIN_ARM64_SHA=$(cat release/mcp-manager-${VERSION}-darwin-arm64.tar.gz.sha256 | cut -d' ' -f1)
+          LINUX_AMD64_SHA=$(cat release/mcp-manager-${VERSION}-linux-amd64.tar.gz.sha256 | cut -d' ' -f1)
+          LINUX_ARM64_SHA=$(cat release/mcp-manager-${VERSION}-linux-arm64.tar.gz.sha256 | cut -d' ' -f1)
+
+          echo "darwin_amd64_sha=${DARWIN_AMD64_SHA}" >> $GITHUB_OUTPUT
+          echo "darwin_arm64_sha=${DARWIN_ARM64_SHA}" >> $GITHUB_OUTPUT
+          echo "linux_amd64_sha=${LINUX_AMD64_SHA}" >> $GITHUB_OUTPUT
+          echo "linux_arm64_sha=${LINUX_ARM64_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+  # Update Homebrew tap automatically
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Homebrew formula
+        env:
+          HOMEBREW_TAP_REPO: bengittins/homebrew-mcp-manager
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+          DARWIN_AMD64_SHA: ${{ needs.release.outputs.darwin_amd64_sha }}
+          DARWIN_ARM64_SHA: ${{ needs.release.outputs.darwin_arm64_sha }}
+          LINUX_AMD64_SHA: ${{ needs.release.outputs.linux_amd64_sha }}
+          LINUX_ARM64_SHA: ${{ needs.release.outputs.linux_arm64_sha }}
+        run: |
+          # Clone the tap repository
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git tap
+          cd tap
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create Formula directory if it doesn't exist
+          mkdir -p Formula
+
+          # Generate the formula
+          cat > Formula/mcp-manager.rb <<EOF
+          class McpManager < Formula
+            desc "MCP (Model Context Protocol) server manager with Docker support"
+            homepage "https://github.com/bengittins/mcp-manager"
+            version "${VERSION#v}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-darwin-arm64.tar.gz"
+                sha256 "${DARWIN_ARM64_SHA}"
+              else
+                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-darwin-amd64.tar.gz"
+                sha256 "${DARWIN_AMD64_SHA}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-linux-arm64.tar.gz"
+                sha256 "${LINUX_ARM64_SHA}"
+              else
+                url "https://github.com/bengittins/mcp-manager/releases/download/${VERSION}/mcp-manager-${VERSION}-linux-amd64.tar.gz"
+                sha256 "${LINUX_AMD64_SHA}"
+              end
+            end
+
+            def install
+              bin.install "mcp-manager"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/mcp-manager --version")
+            end
+          end
+          EOF
+
+          # Commit and push
+          git add Formula/mcp-manager.rb
+          git commit -m "Update mcp-manager to ${VERSION}"
+          git push origin main
