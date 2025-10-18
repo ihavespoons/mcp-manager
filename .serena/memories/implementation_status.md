@@ -1,6 +1,6 @@
 # Implementation Status - Current
 
-Last Updated: 2025-10-17
+Last Updated: 2025-10-18
 
 ## Project Status: PRODUCTION READY ✅
 
@@ -25,7 +25,69 @@ Last Updated: 2025-10-17
 - `internal/gateway/spawner.go` - Unified spawning for containers and processes
 **Impact**: Enables Claude Code (or any HTTP client) to communicate with MCP servers regardless of how they're deployed (container vs process), providing maximum flexibility and consistent interface
 
-### Recent Updates (2025-10-17)
+### Recent Updates (2025-10-18)
+
+#### Serena MCP Tools Documentation ✅
+**Date**: 2025-10-18
+**Purpose**: Comprehensive reference guide for Claude Code to use Serena semantic code tools effectively
+**Motivation**: Enable token-efficient code navigation, precise editing, and better project memory utilization
+**Implementation**:
+- Created `SERENA_TOOLS_GUIDE.md` - Complete reference documentation (10KB+)
+- Updated `CLAUDE.md` - Added quick reference and link to detailed guide
+- Updated `implementation_status.md` - Recorded documentation work
+
+**Documentation Contents**:
+1. **Tool Categories**:
+   - File System Navigation (list_dir, find_file)
+   - Code Understanding (get_symbols_overview, find_symbol, find_referencing_symbols, search_for_pattern)
+   - Code Editing (replace_symbol_body, insert_after_symbol, insert_before_symbol, rename_symbol)
+   - Project Memory (list_memories, read_memory, write_memory, delete_memory)
+   - Meta-Cognitive (think_about_collected_information, think_about_task_adherence, think_about_whether_you_are_done)
+   - Onboarding (check_onboarding_performed, onboarding)
+
+2. **Decision Trees**:
+   - When to read files vs use symbolic tools
+   - Which search tool to use for different scenarios
+   - Which edit tool to use based on edit type
+
+3. **Common Workflows**:
+   - Understanding new files
+   - Finding and editing symbols
+   - Adding new features
+   - Refactoring/renaming
+
+4. **Best Practices**:
+   - Start with get_symbols_overview before reading files
+   - Use include_body=false to see signatures first
+   - Call meta-cognitive tools at key workflow points
+   - Update memories after implementation work
+   - Use relative_path to restrict searches
+
+5. **Parameter Documentation**:
+   - Complete parameter listings for all tools
+   - LSP symbol kind reference (1-26)
+   - Name path matching logic
+   - Pattern matching behavior
+   - Performance tips
+
+**Files Changed**:
+- `SERENA_TOOLS_GUIDE.md` - New comprehensive guide (342 lines)
+- `CLAUDE.md:114-143` - Added Serena tools reference section
+
+**Benefits**:
+- **Token efficiency** - Claude Code can navigate code without reading entire files
+- **Precise operations** - Symbol-level editing instead of regex-based
+- **Better decisions** - Clear guidance on when to use which tool
+- **Consistent patterns** - Documented workflows for common tasks
+- **Project continuity** - Better memory management practices
+
+**Impact**:
+- Future Claude Code sessions will use Serena tools more effectively
+- Reduced token consumption through smarter code navigation
+- More precise code edits with fewer errors
+- Better project knowledge retention across sessions
+
+### Previous Updates (2025-10-17)
 
 #### HTTP Container Readiness Check - IMPROVED ✅
 **Date**: 2025-10-17 (latest session)
@@ -354,6 +416,20 @@ for i := 0; i < maxAttempts; i++ {
 - Gateway: `gateway` command (standalone), `serve` command (as MCP server with auto-registration and cleanup)
 - Integration: `register` (manual with cleanup), `unregister`
 
+#### 8. Documentation ✅
+- **Location**: Root directory and docs/
+- **Files**:
+  - `README.md` - User guide with examples
+  - `CLAUDE.md` - Serena and Claude Code integration guide
+  - `SERENA_TOOLS_GUIDE.md` - Comprehensive Serena tools reference for Claude Code
+  - `docs/IMPLEMENTATION_SUMMARY.md` - Implementation details
+- **Coverage**:
+  - Installation and setup
+  - Configuration examples
+  - Usage patterns
+  - Tool reference with decision trees
+  - Best practices for token-efficient code navigation
+
 ### Current Configuration (mcp-config.yaml)
 
 **Transport**: HTTP (JSON-RPC 2.0 over HTTP)
@@ -412,6 +488,10 @@ Shutdown Flow:
 
 ### Key Files
 
+**Documentation**:
+- `SERENA_TOOLS_GUIDE.md` - Comprehensive tool reference for Claude Code
+- `CLAUDE.md` - Integration guide with quick tool reference
+
 **HTTP Readiness Check**:
 - `internal/gateway/spawner.go:433-475` - HTTP GET health check implementation
 - `internal/gateway/spawner.go:3-16` - Imports (removed `net`, kept `net/http`)
@@ -443,11 +523,6 @@ Shutdown Flow:
 
 **Configuration**:
 - `mcp-config.yaml` - Main config with context7 and sequential-thinking
-
-**Documentation**:
-- `README.md` - Complete user guide
-- `CLAUDE.md` - Serena and Claude Code integration
-- `docs/IMPLEMENTATION_SUMMARY.md` - Implementation details
 
 ### Development Commands
 
@@ -486,6 +561,7 @@ make vet        # Static analysis
 - [x] Graceful shutdown with cleanup
 - [x] Signal handling
 - [x] **Per-server spawn mode detection**
+- [x] **Comprehensive Serena tools documentation**
 
 **In Progress** 🚧:
 - [ ] Production logging (currently uses structured JSON logging)
@@ -515,6 +591,7 @@ make vet        # Static analysis
 - ✅ **Auto-registration implemented**
 - ✅ **Auto-sync configuration cleanup implemented**
 - ✅ **Mixed mode gateway with per-server detection**
+- ✅ **Comprehensive tool documentation for Claude Code**
 - ✅ Config validation
 - ✅ Error handling
 - ✅ Documentation updated
@@ -537,6 +614,7 @@ make vet        # Static analysis
 - ✅ **Auto-cleanup removes stale servers**
 - ✅ **External servers (serena) preserved during cleanup**
 - ✅ **Mixed mode allows flexible server configuration**
+- ✅ **Claude Code has comprehensive Serena tools documentation**
 - ✅ Gateway routing works correctly
 - ✅ Documentation updated and accurate
 - ✅ Containers cleaned up on shutdown
