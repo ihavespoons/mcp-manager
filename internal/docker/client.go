@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -11,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/docker/go-connections/nat"
 )
 
 // Client wraps the Docker client and provides high-level operations
@@ -53,7 +56,11 @@ func (c *Client) PullImage(ctx context.Context, imageName string, pullPolicy str
 		return fmt.Errorf("failed to check if image exists: %w", err)
 	}
 
-	// Apply pull policy
+	// Apply pull policy (default to "if-not-present" if empty)
+	if pullPolicy == "" {
+		pullPolicy = "if-not-present"
+	}
+
 	switch pullPolicy {
 	case "never":
 		if !exists {
@@ -122,6 +129,43 @@ func (c *Client) CreateContainer(ctx context.Context, config *ContainerConfig) (
 	hostConfig := &container.HostConfig{
 		Binds:       config.Volumes,
 		NetworkMode: container.NetworkMode(config.Network),
+	}
+
+	// Add port bindings if specified
+	if len(config.PortMappings) > 0 {
+		portBindings := nat.PortMap{}
+		exposedPorts := nat.PortSet{}
+
+		for _, mapping := range config.PortMappings {
+			parts := strings.Split(mapping, ":")
+			if len(parts) != 2 {
+				return "", fmt.Errorf("invalid port mapping format: %s (expected host:container)", mapping)
+			}
+
+			hostPort := parts[0]
+			containerPort := parts[1]
+
+			// Add /tcp suffix if not present
+			if !strings.Contains(containerPort, "/") {
+				containerPort += "/tcp"
+			}
+
+			port, err := nat.NewPort("tcp", strings.TrimSuffix(containerPort, "/tcp"))
+			if err != nil {
+				return "", fmt.Errorf("invalid container port: %s: %w", containerPort, err)
+			}
+
+			exposedPorts[port] = struct{}{}
+			portBindings[port] = []nat.PortBinding{
+				{
+					HostIP:   "0.0.0.0",
+					HostPort: hostPort,
+				},
+			}
+		}
+
+		containerConfig.ExposedPorts = exposedPorts
+		hostConfig.PortBindings = portBindings
 	}
 
 	// Add restart policy if specified
@@ -337,4 +381,32 @@ func (cs *containerStdout) Read(p []byte) (n int, err error) {
 func (cs *containerStdout) Close() error {
 	// The connection is closed by the stdin closer
 	return nil
+}
+
+// GetMappedPort returns the host port that is mapped to the specified container port
+func (c *Client) GetMappedPort(ctx context.Context, containerID string, containerPort int) (int, error) {
+	info, err := c.cli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to inspect container %s: %w", containerID, err)
+	}
+
+	// Convert container port to nat.Port format
+	port, err := nat.NewPort("tcp", strconv.Itoa(containerPort))
+	if err != nil {
+		return 0, fmt.Errorf("invalid port %d: %w", containerPort, err)
+	}
+
+	// Look up the port binding
+	bindings, exists := info.NetworkSettings.Ports[port]
+	if !exists || len(bindings) == 0 {
+		return 0, fmt.Errorf("no port binding found for container port %d", containerPort)
+	}
+
+	// Parse the host port
+	hostPort, err := strconv.Atoi(bindings[0].HostPort)
+	if err != nil {
+		return 0, fmt.Errorf("invalid host port %s: %w", bindings[0].HostPort, err)
+	}
+
+	return hostPort, nil
 }

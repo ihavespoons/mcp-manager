@@ -7,6 +7,7 @@ type ContainerConfig struct {
 	Command       []string // Command to run
 	Env           []string // Environment variables in KEY=VALUE format
 	Volumes       []string // Volume mounts in host:container format
+	PortMappings  []string // Port mappings in host:container format (e.g., "8080:80" or "0:80" for random host port)
 	Network       string   // Docker network to connect to
 	RestartPolicy string   // Restart policy: "" (none), "unless-stopped", "always", "on-failure"
 	OpenStdin     bool     // Keep stdin open for attach

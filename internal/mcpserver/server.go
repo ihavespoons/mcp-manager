@@ -15,13 +15,13 @@ import (
 
 // Server implements an MCP server that communicates over stdio
 type Server struct {
-	config   *config.Config
-	gateway  *gateway.Gateway
-	stdin    io.Reader
-	stdout   io.Writer
-	mu       sync.Mutex
-	ctx      context.Context
-	cancel   context.CancelFunc
+	config  *config.Config
+	gateway *gateway.Gateway
+	stdin   io.Reader
+	stdout  io.Writer
+	mu      sync.Mutex
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // NewServer creates a new MCP server
@@ -73,14 +73,26 @@ func (s *Server) Serve() error {
 
 // handleMessage processes an MCP protocol message
 func (s *Server) handleMessage(msg *JSONRPCMessage) *JSONRPCMessage {
+	// Check if this is a notification (no ID field)
+	// Notifications must not receive a response according to JSON-RPC 2.0
+	isNotification := msg.ID == nil
+
 	switch msg.Method {
 	case "initialize":
 		return s.handleInitialize(msg)
+	case "notifications/initialized":
+		// Client is notifying us that initialization is complete
+		// No response needed for notifications
+		return nil
 	case "tools/list":
 		return s.handleToolsList(msg)
 	case "tools/call":
 		return s.handleToolsCall(msg)
 	default:
+		// If it's a notification, don't respond
+		if isNotification {
+			return nil
+		}
 		return s.createErrorResponse(msg.ID, -32601, "Method not found", "")
 	}
 }
@@ -267,12 +279,18 @@ func (s *Server) toolServerStatus(id interface{}, args map[string]interface{}) *
 func (s *Server) toolGatewayStatus(id interface{}, args map[string]interface{}) *JSONRPCMessage {
 	output := fmt.Sprintf("MCP Gateway Status\n\n")
 	output += fmt.Sprintf("Port: %d\n", s.config.Settings.GatewayPort)
-	output += fmt.Sprintf("Mode: process\n")
+	output += fmt.Sprintf("Mode: mixed (per-server)\n")
+	output += fmt.Sprintf("  - Containers: servers with docker.image specified\n")
+	output += fmt.Sprintf("  - Processes: servers without docker.image\n")
 	output += fmt.Sprintf("Available Servers: %d\n", len(s.config.GetEnabledServers()))
 	output += fmt.Sprintf("\nGateway Endpoints:\n")
 	for _, srv := range s.config.GetEnabledServers() {
-		output += fmt.Sprintf("  • http://localhost:%d/mcp/%s\n",
-			s.config.Settings.GatewayPort, srv.Name)
+		mode := "container"
+		if srv.Docker.Image == "" {
+			mode = "process"
+		}
+		output += fmt.Sprintf("  • http://localhost:%d/mcp/%s [%s]\n",
+			s.config.Settings.GatewayPort, srv.Name, mode)
 	}
 
 	result := map[string]interface{}{

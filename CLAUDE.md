@@ -69,6 +69,8 @@ When working on this project with Claude Code:
 - "Add validation logic to the Config.Validate method"
 - "Follow the task completion checklist" (runs fmt, vet, test, build)
 - "Find all references to the Server struct"
+- "Register mcp-manager with Claude Code"
+- "Update the documentation to reflect recent changes"
 
 ## Updating Memories
 
@@ -77,6 +79,37 @@ If the project structure, conventions, or commands change significantly, you can
 ```
 "Update the Serena memory files with the new [information]"
 ```
+
+### Important: Memory Updates After Implementation
+
+**IMPORTANT FOR CLAUDE CODE**: After completing any implementation work (new features, bug fixes, architecture changes), you MUST update the relevant Serena memory files to reflect the changes. This ensures project continuity across sessions.
+
+**When to update memories:**
+- After implementing new features
+- After making significant changes to architecture or configuration
+- After completing bug fixes that change behavior
+- After adding or removing major components
+
+**Which memories to update:**
+- `implementation_status.md` - Always update with new features, changes, and current status
+- `project_overview.md` - Update if architecture or major components change
+- `mcp_architecture_learnings.md` - Update if learning new patterns or approaches
+- `current_configuration.md` - Update if configuration format or options change
+
+**How to update:**
+1. Read the current memory file using `mcp__serena__read_memory`
+2. Update it with the new information using `mcp__serena__write_memory`
+3. Include dates, file references, and impact of changes
+4. Keep the format consistent with existing entries
+
+**Example workflow:**
+```
+User: "Add support for HTTP path configuration"
+Claude: [Implements the feature]
+Claude: [Updates implementation_status.md with the new feature, files changed, and impact]
+```
+
+This practice ensures that future sessions have complete context about what has been implemented and why.
 
 ## Resources
 

@@ -174,9 +174,11 @@ func (cc *ClaudeConfig) ListServers(projectPath string) map[string]*MCPServer {
 // ServerFromConfig converts an mcp-manager server config to Claude Code format
 func ServerFromConfig(srv *config.Server, gatewayPort int) *MCPServer {
 	// All servers are registered as HTTP through the gateway
-	// The gateway handles stdio communication internally
+	// The gateway handles stdio communication internally and appends http_path when needed
+	url := fmt.Sprintf("http://localhost:%d/mcp/%s", gatewayPort, srv.Name)
+
 	return &MCPServer{
 		Type: "http",
-		URL:  fmt.Sprintf("http://localhost:%d/mcp/%s", gatewayPort, srv.Name),
+		URL:  url,
 	}
 }

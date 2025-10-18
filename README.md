@@ -30,6 +30,11 @@ The gateway acts as a bridge, accepting HTTP requests and spawning ephemeral MCP
   - HTTP gateway for stdio-based servers with full process and container support
 - **Claude Code integration**: Register/unregister MCP servers with Claude Code CLI
 - **Session management**: On-demand server spawning with automatic cleanup
+- **Container lifecycle management**:
+  - Graceful shutdown with proper container cleanup
+  - Signal handling (SIGTERM, SIGINT) for clean shutdown
+  - Startup cleanup of stale containers from previous runs
+  - All containers labeled for easy identification
 - **Protocol translation**: Full JSON-RPC 2.0 support with proper message framing
 - **Docker integration**: Container isolation with attach API for secure server spawning
 - **Environment variable support**: Pass configuration via environment variables
@@ -112,8 +117,9 @@ mcp-manager status
   - `--timeout` - Session timeout (default: 30m)
 
 #### Claude Code Integration
-- `mcp-manager register [server-name]` - Register MCP servers with Claude Code for the current project
-- `mcp-manager unregister [server-name]` - Unregister MCP servers from Claude Code
+- `mcp-manager register` - Register mcp-manager and all enabled MCP servers with Claude Code
+- `mcp-manager unregister` - Unregister mcp-manager and all configured servers from Claude Code
+- `mcp-manager serve` - Run mcp-manager as an MCP server (stdio) with integrated gateway
 
 ### Global Flags
 
@@ -147,27 +153,27 @@ mcp-manager update --all
 
 Start the gateway in process mode (recommended, fully tested):
 ```bash
-mcp-manager gateway --mode process --port 8080
+mcp-manager gateway --mode process --port 52080
 ```
 
 Start the gateway in container mode (for Docker isolation):
 ```bash
-mcp-manager gateway --mode container --port 8080
+mcp-manager gateway --mode container --port 52080
 ```
 
 Test gateway health:
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:52080/health
 ```
 
 List available servers:
 ```bash
-curl http://localhost:8080/servers
+curl http://localhost:52080/servers
 ```
 
 Send MCP request:
 ```bash
-curl -X POST http://localhost:8080/mcp \
+curl -X POST http://localhost:52080/mcp \
   -H "X-MCP-Server: filesystem" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"client","version":"1.0.0"}}}'
@@ -178,25 +184,31 @@ curl -X POST http://localhost:8080/mcp \
 - **Container Mode**: Spawns MCP servers as Docker containers. Provides isolation and resource limits. Requires MCP server Docker images.
 
 #### Claude Code Integration
-Register all enabled servers:
+
+Register mcp-manager and all enabled servers with Claude Code:
 ```bash
-mcp-manager register
+mcp-manager register --config mcp-config.yaml
 ```
 
-Register a specific server:
-```bash
-mcp-manager register filesystem
-```
-
-Unregister a server:
-```bash
-mcp-manager unregister filesystem
-```
+This will:
+1. Register `mcp-manager` itself as a stdio MCP server that runs `mcp-manager serve`
+2. Register each enabled server as an HTTP endpoint through the gateway (e.g., `http://localhost:52080/mcp/filesystem`)
+3. Update `~/.claude.json` for the current project
 
 Verify registration:
 ```bash
-claude mcp list
+cat ~/.claude.json | jq '.projects["/path/to/your/project"].mcpServers'
 ```
+
+Unregister everything:
+```bash
+mcp-manager unregister
+```
+
+**How it works:**
+- `mcp-manager serve` starts the gateway and exposes management tools (`list_servers`, `server_status`, `gateway_status`)
+- Individual servers (filesystem, git, etc.) are accessed via HTTP endpoints through the gateway
+- Each server maintains its own namespace and can be referenced by name in Claude Code
 
 ## Configuration
 
@@ -229,6 +241,10 @@ servers:
     docker:
       image: org/image:tag        # Docker image to use
       pull_policy: if-not-present # always, never, if-not-present
+
+    http_path: /mcp               # Optional: HTTP path for containers with HTTP endpoints
+                                   # Appended to registration URL for Claude Code
+                                   # Example: http://localhost:52080/mcp/server-name/mcp
 
     command: ["executable"]       # Command to run
     args: ["--flag", "value"]     # Command arguments
@@ -275,14 +291,31 @@ HTTP Client
     ↓
 Gateway (persistent)
     ↓
-Session Manager
+Server Manager
     ↓
-Spawn MCP Server (ephemeral, per session)
+Persistent Server Instances (one per server name)
     ↓
 stdio communication (JSON-RPC)
     ↓
 Tool execution
 ```
+
+**Container Lifecycle:**
+
+The gateway maintains persistent server instances (one per server name) for the duration of its runtime:
+
+1. **Startup**: Cleans up any stale containers from previous runs
+2. **First Request**: Spawns container for the requested server (e.g., "filesystem")
+3. **Subsequent Requests**: Reuses existing container
+4. **Shutdown**: Properly cleans up all containers on exit
+
+**Cleanup Scenarios:**
+- **Normal shutdown**: stdin close from Claude Code triggers cleanup
+- **Signal shutdown**: SIGTERM/SIGINT caught and handled gracefully
+- **Error shutdown**: Context cancellation triggers cleanup
+- **Next startup**: Safety net cleanup removes any missed containers
+
+All containers are labeled with `managed-by=mcp-manager` for easy identification.
 
 ### Deployment Flows
 
@@ -304,9 +337,15 @@ Tool execution
 
 #### Claude Code Integration
 1. Load mcp-manager configuration
-2. Convert server definitions to Claude Code format
-3. Update `~/.claude.json` with per-project server registrations
-4. Servers become available in Claude Code after restart
+2. Register mcp-manager as stdio server that runs `mcp-manager serve`
+3. Register each enabled server as HTTP endpoint through gateway
+4. Update `~/.claude.json` with per-project server registrations
+5. Servers become available in Claude Code after restart
+
+**Registration Details:**
+- `mcp-manager` → stdio server (provides management tools)
+- Each MCP server → HTTP endpoint at `http://localhost:{gateway_port}/mcp/{server-name}`
+- Gateway port defaults to 52080 (configurable in settings.gateway_port)
 
 ## Roadmap
 
@@ -318,14 +357,16 @@ Tool execution
 - [x] HTTP-to-stdio gateway (process mode)
 - [x] HTTP-to-stdio gateway (container mode with Docker attach)
 - [x] JSON-RPC 2.0 protocol handling
-- [x] Session management with cleanup
+- [x] Server instance management (persistent per server)
+- [x] Container lifecycle management with graceful shutdown
+- [x] Signal handling (SIGTERM, SIGINT) for cleanup
+- [x] Startup cleanup of stale containers
 - [x] Claude Code integration (register/unregister)
 - [x] Environment variable handling
 - [x] Volume mount configuration
+- [x] Comprehensive testing suite
 
 ### In Progress 🚧
-- [ ] MCP server Docker image repository
-- [ ] Comprehensive testing suite
 - [ ] Production logging and metrics
 
 ### Planned 📋
@@ -336,6 +377,26 @@ Tool execution
 - [ ] Web UI for server management
 - [ ] Automatic updates with version checking
 - [ ] Server state persistence
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+### Implementation
+- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete implementation history across all development phases, including:
+  - Gateway implementation for HTTP-to-stdio bridging
+  - Claude Code integration and registration
+  - Docker container mode with attach API
+  - Container lifecycle management and cleanup
+  - Architecture diagrams and technical details
+
+### Testing
+- **[Test Results](docs/testing/TEST_RESULTS.md)** - Comprehensive test suite results including unit tests, integration tests, and manual testing
+- **[Gateway Test Results](docs/testing/GATEWAY_TEST_RESULTS.md)** - Detailed test results for process mode gateway functionality
+- **[Container Mode Test Results](docs/testing/CONTAINER_MODE_TEST_RESULTS.md)** - Test results for Docker container mode with stream demultiplexing
+
+### Project Configuration
+- **[CLAUDE.md](CLAUDE.md)** - Instructions for working with Claude Code and Serena MCP for enhanced development assistance
 
 ## Contributing
 
